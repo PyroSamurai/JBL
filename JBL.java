@@ -22,7 +22,7 @@ import static java.lang.System.out;
 /**
 Class Description:
 This class/library was created to deal with the task of extracting bitmaps from
-proprietary image archive formats to standard RGB24 bitmaps. It can help with
+proprietary image archive formats to standard RGB bitmaps. It can help with
 normal bitmap creation too, since Java lacks proper byte support for bitmaps.
 
 Dev Notes:
@@ -31,7 +31,7 @@ No dealing with the RGB like its a short int. We do things the byte way.
 All data is little-endian format. Don't think too hard about the actual code.
 It is a huge headache to understand these bit formats.
 
-Version: 1.0.0
+Version: 1.0.1
 */
 public class JBL
 {
@@ -360,12 +360,11 @@ public class JBL
     public static byte[] setBMP(byte[] scanlines, boolean vertFlip)
     {
         // Set BMP output size
-        int imgSize = scanlines.length+54;
-        byte[] bmp = new byte[imgSize];
+        int bmpSize = scanlines.length+54;
         // Get the BMP header
-        byte[] bmpHeader = setHeader(imgSize,scanlines,vertFlip);
+        byte[] bmpHeader = setHeader(bmpSize,scanlines,vertFlip);
         // Join the header and image data arrays then return
-        return joinImgParts(imgSize,bmpHeader,scanlines);
+        return joinImgParts(bmpSize,bmpHeader,scanlines);
     }
 
     // Make/Set the BMP header array
@@ -375,39 +374,34 @@ public class JBL
         if(hFlip) h = -h;
         // If you want to know what the values in this function mean, read this
         // wikipedia page: wikipedia.org/wiki/BMP_file_format
-        byte[] hdr = new byte[54];
-        hdr[0] = (byte)'B';
-        hdr[1] = (byte)'M';
-        // key: hdr[index], hdr, integer input
-        addInt2Arr4(2, hdr,bsize);
-        addInt2Arr4(6, hdr,0);
-        addInt2Arr4(10,hdr,54);
-        addInt2Arr4(14,hdr,40);
-        addInt2Arr4(18,hdr,w);
-        addInt2Arr4(22,hdr,h);
-        addInt2Arr2(26,hdr,1);
-        addInt2Arr2(28,hdr,bppOut);
-        addInt2Arr4(30,hdr,0);
-        addInt2Arr4(34,hdr,data.length);
-        addInt2Arr4(38,hdr,2835);
-        addInt2Arr4(42,hdr,2835);
-        addInt2Arr4(46,hdr,0);
-        addInt2Arr4(50,hdr,0);
-        return hdr;
+        byte[] header = new byte[54];
+        ByteBuffer hdr = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN);
+        hdr.put((byte)'B');
+        hdr.put((byte)'M');
+        hdr.putInt(bsize);
+        hdr.putInt(0);
+        hdr.putInt(54);
+        hdr.putInt(40);
+        hdr.putInt(w);
+        hdr.putInt(h);
+        hdr.putShort((short)1);
+        hdr.putShort((short)bppOut);
+        hdr.putInt(0);
+        hdr.putInt(data.length);
+        hdr.putInt(2835);
+        hdr.putInt(2835);
+        hdr.putInt(0);
+        hdr.putInt(0);
+        return header;
     }
 
     // combine the header and scanline arrays & return as single new array
     public static byte[] joinImgParts(int bsize, byte[] hdr, byte[] data)
     {
         byte[] bitmap = new byte[bsize];
-        for(int i=0; i < hdr.length; i++)
-        {
-            bitmap[i] = hdr[i];
-        }
-        for(int i=0; i < data.length; i++)
-        {
-            bitmap[i+54] = data[i];
-        }
+        ByteBuffer bmp = ByteBuffer.wrap(bitmap).order(ByteOrder.LITTLE_ENDIAN);
+        bmp.put(hdr);
+        bmp.put(data);
         return bitmap;
     }
 
@@ -440,34 +434,5 @@ public class JBL
         {
             out.println("Error in (makeBMPSet):\n"+ex);
         }
-    }
-
-
-    // ########################## Utility Functions ############################
-    // Utility functions mostly for internal use, but feel free to use them
-
-    // auto add ints to a byte array
-    public static void addInt2Arr4(int index, byte[] array, int num)
-    {
-        byte[] tmp = int2ba(num);
-        array[index+0] = tmp[0];
-        array[index+1] = tmp[1];
-        array[index+2] = tmp[2];
-        array[index+3] = tmp[3];
-    }
-
-    // auto add ints to a byte array
-    public static void addInt2Arr2(int index, byte[] array, int num)
-    {
-        byte[] tmp = int2ba(num);
-        array[index+0] = tmp[0];
-        array[index+1] = tmp[1];
-    }
-
-    // int(4bytes) to byte array
-    public static final byte[] int2ba(int v)
-    {
-        byte[] ba = {(byte)v, (byte)(v>>>8), (byte)(v>>>16), (byte)(v>>>24)};
-        return ba;
     }
 }
