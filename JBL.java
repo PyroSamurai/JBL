@@ -31,39 +31,41 @@ No dealing with the RGB like its a short int. We do things the byte way.
 All data is little-endian format. Don't think too hard about the actual code.
 It is a huge headache to understand these bit formats.
 
-Version: 1.0.1
+Version: 1.1.0
 */
 public class JBL
 {
     // class variables
-    public static int bpp=0,Bpp=0,w=0,h=0,dataSize=0,bppOut=0,pixels=0,nLen=0;
-    public static String name, dir, bitFmtIn, bitFmtOut, RGB24="RGB24";
-    public static String RGB555="RGB555",RGB565="RGB565",ARGB16="ARGB16";
-    public static byte[][] palette = new byte[256][3];
-    public static boolean bitFmtOutSet=false;
+    public int bmpSize,pxStart,dibSize,w,h,planes=1,bpp,compMethod,dataSize;
+    public int Bpp,bppOut,pixels,pxLen,nLen;
+    public String name,dir,bitFmtIn,bitFmtOut;
+    public String RGB24="RGB24",RGB555="RGB555",RGB565="RGB565",ARGB16="ARGB16";
+    public byte[][] palette = new byte[256][3];
+    public boolean bitFmtOutSet=false;
 
     // constructor for JBL class
     public JBL() {}
 
     // ######################## class mutators: begin ########################
-    // The mutators need to be run before getImgBytes(), to have any effect
+    // The mutators need to be run before non-mutators, to have any effect
 
-    // Sets the file-related variables, required for all
-    public static void setFileVars(String fileDir,String bmpRootName)
+    // Sets the file-related vars, required for makeBMP()
+    public void setFileVars(String fileDir,String bmpRootName)
     {
         // File Directory String (should include the File.separator)
         dir = fileDir;
+        // If it doesn't have File.separator, add it
+        if(!dir.endsWith(File.separator)) dir += File.separator;
         // The name that will serve as the base for all bitmap output
         name = bmpRootName;
     }
 
-    // Sets the pixel-related variables, required for all
-    public static void setBmpVars(int W,int H,int bitDepth)
+    // Sets the pixel-related vars, must use this or getBitmapVars for makeBMP()
+    public void setBitmapVars(int width,int height,int bitDepth)
     {
-        // Bitmap width in pixels
-        w = W;
-        // Bitmap height in pixels
-        h = H;
+        // Bitmap width & height in pixels
+        w = width;
+        h = height;
         // Bits Per Pixel
         bpp = bitDepth;
         // Set bpp output
@@ -71,18 +73,56 @@ public class JBL
         if(bpp!=8 && bitFmtOutSet==false) bppOut=bpp;
         // Calculated # of pixels in bitmap
         pixels = w*h;
-        // Data Size, calculated size of the input bitmap data
-        dataSize = pixels*(bpp/8);
+        // Pixel Length, calculated size of the input bitmap data
+        pxLen = pixels*(bpp/8);
+    }
+
+    // Sets the pixel-related vars, useful for pre-existing BMP
+    public void getBitmapVars(byte[] bitmap)
+    {
+        ByteBuffer bmp = ByteBuffer.wrap(bitmap).order(ByteOrder.LITTLE_ENDIAN);
+        bmp.getChar();//skip file signature
+        bmpSize = bmp.getInt();
+        bmp.getInt();//skip reserved bytes
+        pxStart = bmp.getInt();
+        dibSize = bmp.getInt();
+        switch(dibSize)
+        {
+        case 12:
+            w = (int)bmp.getChar();
+            h = (int)bmp.getChar();
+            bmp.getChar();//planes
+            bpp = (int)bmp.getChar();
+            break;
+        case 16:
+        case 52:
+        case 56:
+        case 64:
+        case 108:
+        case 124:
+        default://40
+            w = bmp.getInt();
+            h = bmp.getInt();
+            bmp.getChar();//planes
+            bpp = (int)bmp.getChar();
+            compMethod = bmp.getInt();
+            dataSize = bmp.getInt();
+            break;
+        }
+        // Calculated # of pixels in bitmap
+        pixels = w*h;
+        // Pixel Length, calculated size of the input bitmap data
+        pxLen = pixels*(bpp/8);
     }
 
     // Sets the palette array, required for 8-bit conversions
-    public static void setPalette(byte[][] pal)
+    public void setPalette(byte[][] pal)
     {
         palette = pal;
     }
 
     // Sets the input bit format, required for 16-bit conversions
-    public static void set16BitFmtIn(String bitFormat)
+    public void set16BitFmtIn(String bitFormat)
     {
         bitFmtIn = bitFormat;
         bitFmtOut = bitFormat;
@@ -90,7 +130,7 @@ public class JBL
 
     // Sets bit format output, required for a bppOut != bpp
     // 8bit input will default to 24bit output if this is not set
-    public static void setBitFmtOut(String bitFormat)
+    public void setBitFmtOut(String bitFormat)
     {
         bitFmtOut = bitFormat;
         if(bitFmtOut.equals(RGB24)) bppOut=24;
@@ -98,28 +138,38 @@ public class JBL
         bitFmtOutSet = true;
     }
 
-    // Sets length of largest # & returns it, required for makeBMP(byte[],int)
-    public static int setImgSetSize(int numberOfImages)
+    // Use of 1 of the following is required for makeBMP(byte[],int,String)
+    //##########################################################################
+
+    // Sets nLen to the value of the int parameter
+    public void setNumLength(int lengthOfLargestNumber)
     {
-        return nLen = String.valueOf(numberOfImages).length();
+        nLen = lengthOfLargestNumber;
+    }
+
+    // Sets nLen to length of largest number
+    public void setImgsetSize(int numberOfImages)
+    {
+        nLen = String.valueOf(numberOfImages).length();
     }
 
     // ######################### class mutators: end #########################
-    // #######################################################################
+    /*########################################################################*/
 
-    // Place bitmap bytes in a byte array
-    public static byte[] getImgBytes(ByteBuffer bb, int dataLength)
+    // Get bitmap bytes from a bytebuffer-wrapped byte array
+    public byte[] getImgBytes(ByteBuffer bb, int dataLength)
     {
         // dataLength is for grabbing compressed data, just set to 0 if unneeded
         if(dataLength!=0) dataSize = dataLength;
-        byte[] rawBitmap = new byte[dataSize];
+        if(dataSize==0) dataSize = pxLen;
+        byte[] rawBMP = new byte[dataSize];
         // Read the raw bitmap data into the array that was just made.
-        bb.get(rawBitmap,0,dataSize);
-        return rawBitmap;
+        bb.get(rawBMP,0,dataSize);
+        return rawBMP;
     }
 
     // An interface to convert pixels to a standard RGB format
-    public static byte[] toStdRGB(byte[] rawPixels)
+    public byte[] toStdRGB(byte[] rawPixels)
     {
         byte[] temp24 = toRGB24(rawPixels);
         if(bppOut==16)
@@ -129,7 +179,7 @@ public class JBL
     }
 
     // Converts other BMP formats to the uncompressed 24-bit format
-    public static byte[] toRGB24(byte[] rawBytes)
+    public byte[] toRGB24(byte[] rawBytes)
     {
         byte[] px = new byte[pixels*3];
         // convert 8-bit bmp data to 24-bit data
@@ -229,7 +279,7 @@ public class JBL
     }
 
     // Converts standard 24-bit BMP pixels to 16-bit
-    public static byte[] toRGB16(byte[] rgb24)
+    public byte[] toRGB16(byte[] rgb24)
     {
         byte[] rgb16 = new byte[pixels*2];
         if(bitFmtOut.equals(RGB555))
@@ -279,7 +329,7 @@ public class JBL
     }
 
     // add the necessary scanline byte padding required by bitmaps
-    public static byte[] addPadding(byte[] rgb, int BppOut)
+    public byte[] addPadding(byte[] rgb, int BppOut)
     {
         int colorBytes=w*BppOut, padBytes=(4-(w*BppOut%4))%4;
         int scanline=colorBytes+padBytes, size=scanline*h, dex1=0, dex2=0;
@@ -306,7 +356,7 @@ public class JBL
     }
 
     // remove the scanline byte padding required by bitmaps
-    public static byte[] stripPadding(byte[] scanlines)
+    public byte[] stripPadding(byte[] scanlines)
     {
         int colorBytes=w*(bpp/8), padBytes=(4-(w*(bpp/8)%4))%4;
         int scanline=colorBytes+padBytes, size=colorBytes*h, dex1=0, dex2=0;
@@ -333,7 +383,7 @@ public class JBL
 
     // For BMP's convoluted format to work well the data needs to written
     // bottom-up, with the last scanline at the top and vice versa.
-    public static byte[] reverseRows(byte[] topDownLines)
+    public byte[] reverseRows(byte[] topDownLines)
     {
         int scanline=(topDownLines.length / h), dex1=0, dex2=0;
         byte[] trueScanlines = new byte[topDownLines.length];
@@ -357,18 +407,18 @@ public class JBL
     }
 
     // Makes the final BMP image array
-    public static byte[] setBMP(byte[] scanlines, boolean vertFlip)
+    public byte[] setBMP(byte[] scanlines, boolean vertFlip)
     {
         // Set BMP output size
-        int bmpSize = scanlines.length+54;
+        bmpSize = scanlines.length+54;
         // Get the BMP header
-        byte[] bmpHeader = setHeader(bmpSize,scanlines,vertFlip);
+        byte[] bmpHeader = setHeader(scanlines.length,vertFlip);
         // Join the header and image data arrays then return
-        return joinImgParts(bmpSize,bmpHeader,scanlines);
+        return joinImgParts(bmpHeader,scanlines);
     }
 
     // Make/Set the BMP header array
-    public static byte[] setHeader(int bsize, byte[] data, boolean hFlip)
+    public byte[] setHeader(int dataLength, boolean hFlip)
     {
         // if needed, flip image vertically, the easy way, make height negative
         if(hFlip) h = -h;
@@ -378,7 +428,7 @@ public class JBL
         ByteBuffer hdr = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN);
         hdr.put((byte)'B');
         hdr.put((byte)'M');
-        hdr.putInt(bsize);
+        hdr.putInt(bmpSize);
         hdr.putInt(0);
         hdr.putInt(54);
         hdr.putInt(40);
@@ -387,7 +437,7 @@ public class JBL
         hdr.putShort((short)1);
         hdr.putShort((short)bppOut);
         hdr.putInt(0);
-        hdr.putInt(data.length);
+        hdr.putInt(dataLength);
         hdr.putInt(2835);
         hdr.putInt(2835);
         hdr.putInt(0);
@@ -396,43 +446,45 @@ public class JBL
     }
 
     // combine the header and scanline arrays & return as single new array
-    public static byte[] joinImgParts(int bsize, byte[] hdr, byte[] data)
+    public byte[] joinImgParts(byte[] hdr, byte[] data)
     {
-        byte[] bitmap = new byte[bsize];
-        ByteBuffer bmp = ByteBuffer.wrap(bitmap).order(ByteOrder.LITTLE_ENDIAN);
-        bmp.put(hdr);
-        bmp.put(data);
+        byte[] bitmap = new byte[bmpSize];
+        ByteBuffer BMP = ByteBuffer.wrap(bitmap).order(ByteOrder.LITTLE_ENDIAN);
+        BMP.put(hdr);
+        BMP.put(data);
         return bitmap;
     }
 
     // Output single BMP to file
-    public static void makeBMP(byte[] bmp)
+    public void makeBMP(byte[] BMP)
     {
         try
         {
             // Set BMP name and location, then write BMP to file
             File img = new File(dir+name+".bmp");
-            Files.write(img.toPath(),bmp);
+            Files.write(img.toPath(),BMP);
         }
         catch(Exception ex)
         {
-            out.println("Error in (makeBMP):\n"+ex);
+            out.println("Error in (makeBMP):");
+            ex.printStackTrace(System.out);
         }
     }
 
     // For use when making a set of BMP (one at a time in a loop)
-    public static void makeBMP(byte[] bmp, int currentNum, String suffix)
+    public void makeBMP(byte[] BMP, int currentNum, String suffix)
     {
         try
         {
             // Set BMP name and location, then write BMP to file
             String sNum = String.format("%0"+nLen+"d", currentNum);
             File img = new File(dir+name+"_"+sNum+suffix+".bmp");
-            Files.write(img.toPath(),bmp);
+            Files.write(img.toPath(),BMP);
         }
         catch(Exception ex)
         {
-            out.println("Error in (makeBMPSet):\n"+ex);
+            out.println("Error in (makeBMPSet):");
+            ex.printStackTrace(System.out);
         }
     }
 }

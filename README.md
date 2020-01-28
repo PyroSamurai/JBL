@@ -3,5 +3,6 @@ A fairly spontaneous Java library that contains functions to deal with bitmaps
 both standard and abnormal. Useful for any bitmap not just BMP images.
 
 __Language__: Java <br/>
-__License__: GPLv3+
+__License__: GPLv3+<br/>
+__Author__: [Sean Stafford](http://github.com/PyroSamurai)
 
