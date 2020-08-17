@@ -31,7 +31,16 @@ No dealing with the RGB like its a short int. We do things the byte way.
 All data is little-endian format. Don't think too hard about the actual code.
 It is a huge headache to understand these bit formats.
 
-Version: 1.1.1
+For the sake of versatility all members of the class are public & rely as little
+as possible on each other for data, relying mostly on params & class vars.
+This means you are responsible for using them in the right order, though.
+Just keep that in mind.
+
+For your benefit, the functions are actually in the order you should use them,
+with the exception of stripPadding & reverseRows whose location/existence in
+your program can vary a lot with your use-case.
+
+Version: 1.1.2
 */
 public class JBL
 {
@@ -378,7 +387,7 @@ public byte[] stripPadding(byte[] scanlines)
                 if(x<colorBytes)
                     rgb[dex1++] = scanlines[dex2++];
                 else
-                    dex2++;
+                    dex2++;//skip through padding
             }
         }
     }
@@ -414,10 +423,9 @@ public byte[] reverseRows(byte[] topDownLines)
     return trueScanlines;
 }
 
-// Makes the final BMP image array
-public byte[] setBMP(byte[] scanlines, boolean vertFlip)
+// Set bpp-specific dib header info
+public void setDibSizeParams()
 {
-    // Set bpp-specific header info
     if(bppOut==16)
     {
         dataStart  = 70;
@@ -430,8 +438,20 @@ public byte[] setBMP(byte[] scanlines, boolean vertFlip)
         dibSize    = 40;
         compMethod = 0;
     }
+}
+
+// Sets bmpSize, requires padded scanlines size; run setDibSizeParams() first
+public void setBitmapSize(int dataLength)
+{
     // Set BMP output size
-    bmpSize = scanlines.length+dataStart;
+    bmpSize = dataLength+dataStart;
+}
+
+// Makes the final BMP image array
+public byte[] setBMP(byte[] scanlines, boolean vertFlip)
+{
+    setDibSizeParams();
+    setBitmapSize(scanlines.length);
     // Get the BMP header
     byte[] bmpHeader = setHeader(scanlines.length,vertFlip);
     // Join the header and image data arrays then return
